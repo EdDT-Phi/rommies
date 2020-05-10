@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 void main() => runApp(MyApp());
 
-const roomies =
+final roomies = [
+  'Tom',
+  'Carmina',
+  'Eddie',
+];
+
+const roomieImg =
     'https://wanderlustbecomingatraveler.files.wordpress.com/2015/12/roommates.jpg';
 
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Flutter Demo',
-    theme: ThemeData(
-      primarySwatch: Colors.blue,
-    ),
-    home: MyHomePage(),
-  );
+        title: 'Flutter Demo',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+        ),
+        home: MyHomePage(),
+      );
 }
 
 class MyHomePage extends StatefulWidget {
@@ -22,145 +29,152 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  TaskListCategory selectedCategory = TaskListCategory.kitchen;
+  Task selectedTask = superTask.subtasks[0];
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    drawer: MyDrawer(
-      onCategorySelected: (option) =>
-          setState(() => selectedCategory = option),
-    ),
-    appBar: AppBar(
-      title: Text('Roomie Tasks - ${selectedCategory.title}'),
-    ),
-    body: TasksListWidget(taskCategory: selectedCategory),
-  );
+        drawer: MyDrawer(
+          onTaskSelected: (task) => setState(() => selectedTask = task),
+        ),
+        appBar: AppBar(
+          title: Text('Roomie Tasks - ${selectedTask.text}'),
+        ),
+        body: TasksListWidget(task: selectedTask),
+      );
 }
 
 class MyDrawer extends StatelessWidget {
-  final void Function(TaskListCategory) onCategorySelected;
+  final void Function(Task) onTaskSelected;
 
-  MyDrawer({this.onCategorySelected});
+  MyDrawer({this.onTaskSelected});
 
   @override
   Widget build(BuildContext context) => Drawer(
-    child: ListView(
-      // Important: Remove any padding from the ListView.
-      padding: EdgeInsets.zero,
-      children: [
-        DrawerHeader(
-          child: Image.network(roomies),
-        )
-      ]..addAll(TaskListCategory.allCategories.map(
-            (category) => ListTile(
-          title: Text(category.title),
-          onTap: () => onCategorySelected(category),
+        child: ListView(
+          // Important: Remove any padding from the ListView.
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              child: Image.network(roomieImg),
+            )
+          ]..addAll(superTask.subtasks.map(
+              (task) => ListTile(
+                title: Text(task.text),
+                onTap: () {
+                  onTaskSelected(task);
+                  Navigator.of(context).pop();
+                },
+              ),
+            )),
         ),
-      )),
-    ),
-  );
-}
-
-class TasksListWidget extends StatefulWidget {
-  final TaskListCategory taskCategory;
-
-  const TasksListWidget({this.taskCategory});
-
-  @override
-  _TasksListWidgetState createState() => _TasksListWidgetState();
+      );
 }
 
 final doneStyle =
-TextStyle(color: Colors.black38, decoration: TextDecoration.lineThrough);
+    TextStyle(color: Colors.black38, decoration: TextDecoration.lineThrough);
 
-class _TasksListWidgetState extends State<TasksListWidget> {
-  Future<TaskList> tasks;
+class TasksListWidget extends StatelessWidget {
+  final Task task;
 
-  @override
-  void initState() {
-    tasks = TaskListProvider.tasksForCategory(widget.taskCategory.id);
-
-    super.initState();
-  }
+  const TasksListWidget({this.task});
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<TaskList>(
-    future: tasks,
-    builder: (context, snapshot) {
-      if (snapshot.hasError) {
-        return Text(snapshot.error);
-      }
-
-      if (!snapshot.hasData) {
-        return CircularProgressIndicator();
-      }
-
-      return ListView.builder(
+  Widget build(BuildContext context) => ListView.builder(
+    itemCount: task.subtasks.length,
         itemBuilder: (context, idx) {
-          if (idx >= snapshot.data.tasks.length) return null;
-          final task = snapshot.data.tasks[idx];
+          final doneTask = idx % 3 == 0;
+          final subTask = task.subtasks[idx];
+
           return ListTile(
-            onTap: () {},
             title: Text(
-              task.text,
-              style: task.done ? doneStyle : null,
+              subTask.text,
+              style: doneTask ? doneStyle : null,
             ),
+            onTap: () {
+              final now = DateTime.now();
+              FirebaseDatabase.instance
+                  .reference()
+                  .child('tasks')
+                  .child('${now.millisecondsSinceEpoch}')
+                  .set(DoneTask(
+                    taskId: subTask.id,
+                    doneTimestamp: now.millisecondsSinceEpoch,
+                    doneBy: 'Eddie',
+                  ).toMap());
+            },
           );
         },
       );
-    },
-  );
 }
 
-class TaskListCategory {
-  final String id;
-  final String title;
+class DoneTask {
+  final String taskId;
+  final int doneTimestamp;
+  final String doneBy;
 
-  static const kitchen = TaskListCategory(
-    id: 'kitchen',
-    title: 'Kitchen',
-  );
+  DoneTask({
+    @required this.doneTimestamp,
+    @required this.doneBy,
+    @required this.taskId,
+  });
 
-  static const bathroom = TaskListCategory(
-    id: 'bathroom',
-    title: 'Bathroom',
-  );
-
-  static const living_area = TaskListCategory(
-    id: 'living_area',
-    title: 'Living Area',
-  );
-
-  static const allCategories = [kitchen, bathroom, living_area];
-
-  const TaskListCategory({this.id, this.title});
-}
-
-class TaskList {
-  final List<Task> tasks;
-  final TaskListCategory category;
-
-  TaskList({this.tasks, this.category});
+  Map<String, String> toMap() => {
+        'taskId': '$taskId',
+        'doneTimestamp': '$doneTimestamp',
+        'doneBy': '$doneBy',
+      };
 }
 
 class Task {
-  final bool done;
   final String text;
-  final String taskId;
-  final String description;
 
-  Task({this.taskId, this.description, this.done, this.text});
+  // All subtasks are assigned to the same person, if any;
+  final List<Task> subtasks;
+  final int assignedOffset;
+
+  const Task({
+    @required this.text,
+    this.assignedOffset = -1,
+    this.subtasks = const [],
+  });
+
+  String get id => text.toLowerCase().replaceAll(' ', '_');
 }
 
-class TaskListProvider {
-  static Future<TaskList> tasksForCategory(String taskCategory) async =>
-      TaskList(
-        tasks: [
-          Task(done: false, text: "Clean mirror"),
-          Task(done: true, text: "Clean toilet"),
-          Task(done: false, text: "Clean floor"),
-          Task(done: false, text: "Clean tub"),
-          Task(done: false, text: "Clean $taskCategory"),
-        ],
-      );
-}
+const superTask = const Task(
+  text: 'All',
+  subtasks: [
+    Task(
+      text: 'Kitchen',
+      assignedOffset: 0,
+      subtasks: [
+        Task(text: 'Take out trash and recycling'),
+        Task(text: 'Empty dishwasher'),
+        Task(text: 'Put away unused dishes'),
+        Task(text: 'Clear and clean surfaces'),
+        Task(text: 'Throw away old food'),
+      ],
+    ),
+    Task(
+      text: 'Bathroom',
+      assignedOffset: 1,
+      subtasks: [
+        Task(text: 'Take out trash'),
+        Task(text: 'Wipe surfaces'),
+        Task(text: 'Wipe mirror'),
+        Task(text: 'Wipe faucet'),
+        Task(text: 'Vacuum and mop floor'),
+        Task(text: 'Clean the toilet'),
+      ],
+    ),
+    Task(
+      text: 'Living Area',
+      assignedOffset: 2,
+      subtasks: [
+        Task(text: 'Fold up blankets'),
+        Task(text: 'Pick up pillows'),
+        Task(text: 'Clean floor'),
+      ],
+    ),
+  ],
+);
