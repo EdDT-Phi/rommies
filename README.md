@@ -1,4 +1,4 @@
-# rommies
+# roomies
 
 A new Flutter application.
 

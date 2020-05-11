@@ -1,4 +1,4 @@
-package me.eddt.rommies
+package me.eddt.roomies
 
 import io.flutter.embedding.android.FlutterActivity
 

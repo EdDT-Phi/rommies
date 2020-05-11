@@ -1,11 +1,9 @@
-
 import 'package:flutter/material.dart';
-import 'package:rommies/roomies.dart';
 
 class DoneTask {
   final String taskId;
   final int doneTimestamp;
-  final String doneBy;
+  final String doneBy; // Name
 
   DoneTask({
     @required this.doneTimestamp,
@@ -14,10 +12,16 @@ class DoneTask {
   });
 
   Map<String, String> toMap() => {
-    'taskId': '$taskId',
-    'doneTimestamp': '$doneTimestamp',
-    'doneBy': '$doneBy',
-  };
+        'taskId': '$taskId',
+        'doneTimestamp': '$doneTimestamp',
+        'doneBy': '$doneBy',
+      };
+
+  static DoneTask fromMap(dynamic values) => DoneTask(
+        taskId: values['taskId'],
+        doneBy: values['doneBy'],
+        doneTimestamp: int.parse(values['doneTimestamp']),
+      );
 }
 
 class Task {

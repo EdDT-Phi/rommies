@@ -49,25 +49,23 @@ class RoomieProvider {
 class Roomie {
   final String name;
   final String subtitle;
-  final int idx;
 
-  const Roomie(
-      {@required this.name, @required this.subtitle, @required this.idx});
+  const Roomie({
+    @required this.name,
+    @required this.subtitle,
+  });
 
   static const tom = Roomie(
     name: 'Tom',
     subtitle: 'AKA Rom',
-    idx: 0,
   );
   static const carmina = Roomie(
     name: 'Carmina',
     subtitle: 'AKA Carmione',
-    idx: 1,
   );
   static const eddie = Roomie(
     name: 'Eddie',
     subtitle: 'AKA Edry',
-    idx: 2,
   );
 
   static const roomies = [tom, carmina, eddie];
@@ -76,10 +74,10 @@ class Roomie {
       ? null
       : roomies.firstWhere((roomie) => roomie.name == name);
 
-  // TODO(eddt): Probably need to add some offset for the day I want;
-  static int get _weekNum =>
-      DateTime.now().millisecondsSinceEpoch ~/ (7 * 24 * 60 * 60 * 1000);
+  static int get weekNum =>
+      (DateTime.now().millisecondsSinceEpoch -
+          DateTime(2020, 5, 5).millisecondsSinceEpoch) ~/
+      (7 * 24 * 60 * 60 * 1000);
 
-  static int taskIdxForRoomie(Roomie roomie) =>
-      (_weekNum + roomies.indexOf(roomie)) % roomies.length;
+  int get taskIdx => (weekNum + roomies.indexOf(this)) % roomies.length;
 }
