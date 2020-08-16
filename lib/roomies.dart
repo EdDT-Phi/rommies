@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dates.dart';
 import 'home.dart';
 
 class RoomieSelectionScreen extends StatelessWidget {
@@ -59,13 +60,15 @@ class Roomie {
     name: 'Tom',
     subtitle: 'AKA Rom',
   );
-  static const carmina = Roomie(
-    name: 'Carmina',
-    subtitle: 'AKA Carmione',
-  );
+
   static const eddie = Roomie(
     name: 'Eddie',
     subtitle: 'AKA Edry',
+  );
+
+  static const carmina = Roomie(
+    name: 'Carmina',
+    subtitle: 'AKA Carmione',
   );
 
   static const roomies = [tom, carmina, eddie];
@@ -74,10 +77,6 @@ class Roomie {
       ? null
       : roomies.firstWhere((roomie) => roomie.name == name);
 
-  static int get weekNum =>
-      (DateTime.now().millisecondsSinceEpoch -
-          DateTime(2020, 5, 5).millisecondsSinceEpoch) ~/
-      (7 * 24 * 60 * 60 * 1000);
-
-  int get taskIdx => (weekNum + roomies.indexOf(this)) % roomies.length;
+  int get taskIdx =>
+      (RoomieDates.weekNum + roomies.indexOf(this)) % roomies.length;
 }

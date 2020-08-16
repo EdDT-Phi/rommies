@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'roomies.dart';
 import 'task.dart';
+import 'dates.dart';
 
 const roomieImg =
     'https://wanderlustbecomingatraveler.files.wordpress.com/2015/12/roommates.jpg';
@@ -28,8 +29,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final roomieAssignedToTask = Roomie.roomies.firstWhere(
-        (roomie) => roomie.taskIdx == superTask.subtasks.indexOf(selectedTask));
+    final selectedTaskIdx = superTask.subtasks.indexOf(selectedTask);
+    final roomieAssignedToTask = Roomie.roomies
+        .firstWhere((roomie) => roomie.taskIdx == selectedTaskIdx);
 
     return Scaffold(
       drawer: MyDrawer(
@@ -63,10 +65,11 @@ class MyDrawer extends StatelessWidget {
             }
 
             final task = superTask.subtasks[idx - 1];
-            final roomieIdx = (Roomie.weekNum + idx - 1) % Roomie.roomies.length;
+            final roomieAssignedToTask = Roomie.roomies
+                .firstWhere((roomie) => roomie.taskIdx == idx - 1);
 
             return ListTile(
-              title: Text('${task.text} - ${Roomie.roomies[roomieIdx].name}'),
+              title: Text('${task.text} - ${roomieAssignedToTask.name}'),
               onTap: () {
                 onTaskSelected(task);
                 Navigator.of(context).pop();
@@ -91,80 +94,79 @@ class TasksListWidget extends StatefulWidget {
 }
 
 class _TasksListWidgetState extends State<TasksListWidget> {
-  Future<List<DoneTask>> doneTaskLogs;
+  Future<List<DoneTask>> doneTaskFuture;
+  Stream<List<DoneTask>> doneTaskStream;
 
   @override
   void initState() {
     updateData();
+    doneTaskStream = createStream();
 
     super.initState();
   }
 
   void updateData() async {
-    doneTaskLogs = getDataFromDb();
+    doneTaskFuture = getDataFromDb();
   }
 
   Future<List<DoneTask>> getDataFromDb() async =>
       logsToData(await createQuery().once());
 
-  List<DoneTask> logsToData(DataSnapshot snapshot) => snapshot.value.values
+  List<DoneTask> logsToData(DataSnapshot snapshot) => (snapshot.value ?? {})
+      .values
       .map<DoneTask>((values) => DoneTask.fromMap(values))
       .toList();
 
-  Query createQuery() => FirebaseDatabase.instance
+  DatabaseReference createQuery() => FirebaseDatabase.instance
       .reference()
       .child('tasks')
-      .startAt(null, key: startOfWeekKey);
+      .child('${RoomieDates.weekNum}');
 
-  static String get startOfWeekKey {
-    final today = DateTime.now();
-    final startOfToday = DateTime(today.year, today.month, today.day);
-
-    // If Monday, subtract 6 days to get to last Tuesday.
-    // Tuesday is start of week.
-    final startOfWeek = startOfToday.weekday == 1
-        ? startOfToday.subtract(Duration(days: 6))
-        : startOfToday.subtract(Duration(days: today.weekday - 2));
-
-    return '${startOfWeek.millisecondsSinceEpoch}';
-  }
+  Stream<List<DoneTask>> createStream() => createQuery()
+      .onValue
+      .map<List<DoneTask>>((event) => logsToData(event.snapshot));
 
   @override
   Widget build(BuildContext context) => FutureBuilder<List<DoneTask>>(
-        future: doneTaskLogs,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return Text(snapshot.error.toString());
-          if (!snapshot.hasData) return CircularProgressIndicator();
+        future: doneTaskFuture,
+        builder: (context, futureSnapshot) {
+          if (futureSnapshot.hasError)
+            return Text(futureSnapshot.error.toString());
+          if (!futureSnapshot.hasData) return CircularProgressIndicator();
 
-          final doneTasks = snapshot.data.map((task) => task.taskId).toSet();
+          return StreamBuilder<List<DoneTask>>(
+              initialData: futureSnapshot.data,
+              stream: doneTaskStream,
+              builder: (context, streamSnapshot) {
+                final doneTasks =
+                    streamSnapshot.data.map((task) => task.taskId).toSet();
 
-          return ListView.builder(
-            itemCount: widget.task.subtasks.length,
-            itemBuilder: (context, idx) {
-              final subTask = widget.task.subtasks[idx];
-              final doneTask = doneTasks.contains(subTask.id);
+                return ListView.builder(
+                  itemCount: widget.task.subtasks.length,
+                  itemBuilder: (context, idx) {
+                    final subTask = widget.task.subtasks[idx];
+                    final doneTask = doneTasks.contains(subTask.id);
 
-              return ListTile(
-                enabled: !doneTask,
-                title: Text(
-                  subTask.text,
-                  style: doneTask ? doneStyle : null,
-                ),
-                onTap: () {
-                  final now = DateTime.now();
-                  FirebaseDatabase.instance
-                      .reference()
-                      .child('tasks')
-                      .child('${now.millisecondsSinceEpoch}')
-                      .set(DoneTask(
-                        taskId: subTask.id,
-                        doneTimestamp: now.millisecondsSinceEpoch,
-                        doneBy: widget.roomie.name,
-                      ).toMap());
-                },
-              );
-            },
-          );
+                    return ListTile(
+                      enabled: !doneTask,
+                      title: Text(
+                        subTask.text,
+                        style: doneTask ? doneStyle : null,
+                      ),
+                      onTap: () {
+                        final now = DateTime.now();
+                        createQuery()
+                            .child('${now.millisecondsSinceEpoch}')
+                            .set(DoneTask(
+                              taskId: subTask.id,
+                              doneTimestamp: now.millisecondsSinceEpoch,
+                              doneBy: widget.roomie.name,
+                            ).toMap());
+                      },
+                    );
+                  },
+                );
+              });
         },
       );
 }
