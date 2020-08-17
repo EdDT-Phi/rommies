@@ -1,74 +1,99 @@
 import 'package:flutter/material.dart';
 
-class DoneTask {
-  final String taskId;
+import 'roomies.dart';
+
+class TaskLog {
   final int doneTimestamp;
   final String doneBy; // Name
 
-  DoneTask({
+  TaskLog({
     @required this.doneTimestamp,
     @required this.doneBy,
-    @required this.taskId,
   });
-
-  Map<String, String> toMap() => {
-        'taskId': '$taskId',
-        'doneTimestamp': '$doneTimestamp',
-        'doneBy': '$doneBy',
-      };
-
-  static DoneTask fromMap(dynamic values) => DoneTask(
-        taskId: values['taskId'],
-        doneBy: values['doneBy'],
-        doneTimestamp: int.parse(values['doneTimestamp']),
-      );
 }
 
 class Task {
-  final String text;
+  final String taskName;
 
-  // All subtasks are assigned to the same person, if any;
-  final List<Task> subtasks;
+  final List<TaskLog> taskLogs;
 
   const Task({
-    @required this.text,
-    this.subtasks = const [],
+    @required this.taskName,
+    @required this.taskLogs,
   });
 
-  String get id => text.toLowerCase().replaceAll(' ', '_');
+  String get id => taskName.toLowerCase().replaceAll(' ', '_');
+
+  Map<String, dynamic> toMap() => {
+        'name': taskName,
+        'task_logs': Map.fromIterable(
+          taskLogs,
+          key: (log) => log.name,
+          value: (log) => log.timestamp,
+        ),
+      };
+
+  static Task fromMap(dynamic values) => Task(
+        taskName: values['name'],
+        taskLogs: values['task_logs']
+                ?.entries
+                ?.map((keyValue) => TaskLog(
+                      doneBy: keyValue.key,
+                      doneTimestamp: keyValue.value,
+                    ))
+                ?.toList() ??
+            [],
+      );
 }
 
-const superTask = const Task(
-  text: 'All',
-  subtasks: [
-    Task(
-      text: 'Kitchen',
-      subtasks: [
-        Task(text: 'Take out trash and recycling'),
-        Task(text: 'Empty dishwasher'),
-        Task(text: 'Put away unused dishes'),
-        Task(text: 'Clear and clean surfaces'),
-        Task(text: 'Throw away old food'),
-      ],
-    ),
-    Task(
-      text: 'Bathroom',
-      subtasks: [
-        Task(text: 'Take out trash'),
-        Task(text: 'Wipe surfaces'),
-        Task(text: 'Wipe mirror'),
-        Task(text: 'Wipe faucet'),
-        Task(text: 'Vacuum and mop floor'),
-        Task(text: 'Clean the toilet'),
-      ],
-    ),
-    Task(
-      text: 'Living Area',
-      subtasks: [
-        Task(text: 'Fold up blankets'),
-        Task(text: 'Pick up pillows'),
-        Task(text: 'Clean floor'),
-      ],
-    ),
-  ],
-);
+class TaskArea {
+  final String areaName;
+
+  final List<Roomie> assigned;
+  final List<Task> tasks;
+
+  TaskArea({
+    @required this.areaName,
+    @required this.tasks,
+    @required this.assigned,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'assigned': Map.fromIterable(
+          assigned,
+          key: (roomie) => roomie.name,
+          value: (roomie) => roomie.name,
+        ),
+        'tasks': Map.fromIterable(
+          tasks,
+          key: (task) => task.taskName,
+          value: (task) => task.toMap(),
+        ),
+      };
+
+  static TaskArea fromMap(String areaName, dynamic values) => TaskArea(
+        areaName: areaName,
+        assigned: values['assigned']
+            .entries
+            .map<Roomie>((keyValue) => Roomie.forName(keyValue.key))
+            .toList(),
+        tasks: values['tasks']
+                ?.values
+                ?.map<Task>((value) => Task.fromMap(value))
+                ?.toList() ??
+            [],
+      );
+}
+
+class AllTasks {
+  final List<TaskArea> taskAreas;
+
+  AllTasks({@required this.taskAreas});
+
+  static AllTasks fromMap(dynamic values) => AllTasks(
+        taskAreas: values.entries
+            .map<TaskArea>(
+                (keyValue) => TaskArea.fromMap(keyValue.key, keyValue.value))
+            .toList(),
+      );
+}

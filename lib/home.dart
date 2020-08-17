@@ -1,170 +1,118 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:roomies/add_area.dart';
+import 'package:roomies/add_task.dart';
+import 'package:roomies/firebase_controller.dart';
 
 import 'roomies.dart';
 import 'task.dart';
-import 'dates.dart';
 
 const roomieImg =
     'https://wanderlustbecomingatraveler.files.wordpress.com/2015/12/roommates.jpg';
 
-class MyHomePage extends StatefulWidget {
+class MyHomePage extends StatelessWidget {
   final Roomie roomie;
 
   const MyHomePage({@required this.roomie});
 
   @override
-  _MyHomePageState createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  Task selectedTask;
-
-  @override
-  void initState() {
-    selectedTask = superTask.subtasks[widget.roomie.taskIdx];
-
-    super.initState();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final selectedTaskIdx = superTask.subtasks.indexOf(selectedTask);
-    final roomieAssignedToTask = Roomie.roomies
-        .firstWhere((roomie) => roomie.taskIdx == selectedTaskIdx);
-
     return Scaffold(
-      drawer: MyDrawer(
-        onTaskSelected: (task) => setState(() => selectedTask = task),
-      ),
       appBar: AppBar(
-        title: Text('${selectedTask.text} - ${roomieAssignedToTask.name}'),
+        title: Text('Roomies'),
+      ),
+      floatingActionButton: FloatingActionButton(
+        child: Icon(Icons.add),
+        onPressed: () => Navigator.of(context)
+            .push(MaterialPageRoute(builder: (context) => AddAreaScreen())),
       ),
       body: TasksListWidget(
-        task: selectedTask,
-        roomie: widget.roomie,
+        roomie: roomie,
       ),
     );
   }
 }
 
-class MyDrawer extends StatelessWidget {
-  final void Function(Task) onTaskSelected;
-
-  MyDrawer({this.onTaskSelected});
-
-  @override
-  Widget build(BuildContext context) => Drawer(
-        child: ListView.builder(
-          itemCount: Roomie.roomies.length + 1,
-          itemBuilder: (context, idx) {
-            if (idx == 0) {
-              return DrawerHeader(
-                child: Image.network(roomieImg),
-              );
-            }
-
-            final task = superTask.subtasks[idx - 1];
-            final roomieAssignedToTask = Roomie.roomies
-                .firstWhere((roomie) => roomie.taskIdx == idx - 1);
-
-            return ListTile(
-              title: Text('${task.text} - ${roomieAssignedToTask.name}'),
-              onTap: () {
-                onTaskSelected(task);
-                Navigator.of(context).pop();
-              },
-            );
-          },
-        ),
-      );
-}
-
-final doneStyle =
-    TextStyle(color: Colors.black38, decoration: TextDecoration.lineThrough);
-
 class TasksListWidget extends StatefulWidget {
   final Roomie roomie;
-  final Task task;
 
-  const TasksListWidget({@required this.task, @required this.roomie});
+  const TasksListWidget({@required this.roomie});
 
   @override
   _TasksListWidgetState createState() => _TasksListWidgetState();
 }
 
 class _TasksListWidgetState extends State<TasksListWidget> {
-  Future<List<DoneTask>> doneTaskFuture;
-  Stream<List<DoneTask>> doneTaskStream;
+  Future<AllTasks> allTasksFuture;
+  Stream<AllTasks> allTasksStream;
 
   @override
   void initState() {
     updateData();
-    doneTaskStream = createStream();
+    allTasksStream = createStream();
 
     super.initState();
   }
 
   void updateData() async {
-    doneTaskFuture = getDataFromDb();
+    allTasksFuture = getDataFromDb();
   }
 
-  Future<List<DoneTask>> getDataFromDb() async =>
+  Future<AllTasks> getDataFromDb() async =>
       logsToData(await createQuery().once());
 
-  List<DoneTask> logsToData(DataSnapshot snapshot) => (snapshot.value ?? {})
-      .values
-      .map<DoneTask>((values) => DoneTask.fromMap(values))
-      .toList();
+  AllTasks logsToData(DataSnapshot snapshot) =>
+      AllTasks.fromMap(snapshot.value ?? {});
 
-  DatabaseReference createQuery() => FirebaseDatabase.instance
-      .reference()
-      .child('tasks')
-      .child('${RoomieDates.weekNum}');
+  DatabaseReference createQuery() => FirebaseController.allAreas;
 
-  Stream<List<DoneTask>> createStream() => createQuery()
+  Stream<AllTasks> createStream() => createQuery()
       .onValue
-      .map<List<DoneTask>>((event) => logsToData(event.snapshot));
+      .map<AllTasks>((event) => logsToData(event.snapshot));
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<DoneTask>>(
-        future: doneTaskFuture,
+  Widget build(BuildContext context) => FutureBuilder<AllTasks>(
+        future: allTasksFuture,
         builder: (context, futureSnapshot) {
           if (futureSnapshot.hasError)
             return Text(futureSnapshot.error.toString());
           if (!futureSnapshot.hasData) return CircularProgressIndicator();
 
-          return StreamBuilder<List<DoneTask>>(
+          return StreamBuilder<AllTasks>(
               initialData: futureSnapshot.data,
-              stream: doneTaskStream,
+              stream: allTasksStream,
               builder: (context, streamSnapshot) {
-                final doneTasks =
-                    streamSnapshot.data.map((task) => task.taskId).toSet();
+
+                if (streamSnapshot.hasError)
+                  return Text(streamSnapshot.error.toString());
+                if (!streamSnapshot.hasData) return CircularProgressIndicator();
 
                 return ListView.builder(
-                  itemCount: widget.task.subtasks.length,
                   itemBuilder: (context, idx) {
-                    final subTask = widget.task.subtasks[idx];
-                    final doneTask = doneTasks.contains(subTask.id);
-
-                    return ListTile(
-                      enabled: !doneTask,
-                      title: Text(
-                        subTask.text,
-                        style: doneTask ? doneStyle : null,
-                      ),
-                      onTap: () {
-                        final now = DateTime.now();
-                        createQuery()
-                            .child('${now.millisecondsSinceEpoch}')
-                            .set(DoneTask(
-                              taskId: subTask.id,
-                              doneTimestamp: now.millisecondsSinceEpoch,
-                              doneBy: widget.roomie.name,
-                            ).toMap());
-                      },
+                    final area = streamSnapshot.data.taskAreas[idx];
+                    return ExpansionTile(
+                      title: Text(area.areaName),
+                      children: area.tasks
+                          .map<Widget>((task) => ListTile(
+                                title: Text(task.taskName),
+                              ))
+                          .toList()
+                            ..add(ListTile(
+                              title: RaisedButton.icon(
+                                onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => AddTaskScreen(
+                                        areaName: area.areaName,
+                                      ),
+                                    )),
+                                icon: Icon(Icons.add),
+                                label: Text('Add Task'),
+                              ),
+                            )),
                     );
                   },
+                  itemCount: streamSnapshot.data.taskAreas.length,
                 );
               });
         },
