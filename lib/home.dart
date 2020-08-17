@@ -82,7 +82,6 @@ class _TasksListWidgetState extends State<TasksListWidget> {
               initialData: futureSnapshot.data,
               stream: allTasksStream,
               builder: (context, streamSnapshot) {
-
                 if (streamSnapshot.hasError)
                   return Text(streamSnapshot.error.toString());
                 if (!streamSnapshot.hasData) return CircularProgressIndicator();
@@ -93,9 +92,8 @@ class _TasksListWidgetState extends State<TasksListWidget> {
                     return ExpansionTile(
                       title: Text(area.areaName),
                       children: area.tasks
-                          .map<Widget>((task) => ListTile(
-                                title: Text(task.taskName),
-                              ))
+                          .map<Widget>((task) =>
+                              buildTaskTile(area, task, widget.roomie))
                           .toList()
                             ..add(ListTile(
                               title: RaisedButton.icon(
@@ -117,4 +115,28 @@ class _TasksListWidgetState extends State<TasksListWidget> {
               });
         },
       );
+
+  Widget buildTaskTile(TaskArea area, Task task, Roomie roomie) {
+    final lastDoneRoomie = task.lastDoneBy?.name;
+    final nextRoomie = task.next(area.assigned)?.name;
+
+    final userIsNext = roomie.name == nextRoomie;
+
+    return ListTile(
+      isThreeLine: lastDoneRoomie != null,
+      title: Text(task.taskName),
+      subtitle: lastDoneRoomie == null
+          ? null
+          : Text('Last done by: $lastDoneRoomie\nNext: $nextRoomie'),
+      trailing: IconButton(
+        onPressed: () => FirebaseController.markTaskDone(
+          areaName: area.areaName,
+          taskId: task.id,
+          roomie: widget.roomie,
+        ),
+        icon: Icon(Icons.done),
+      ),
+      leading: userIsNext ? Icon(Icons.error_outline) : null,
+    );
+  }
 }

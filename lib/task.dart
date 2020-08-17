@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'roomies.dart';
 
 class TaskLog {
-  final int doneTimestamp;
-  final String doneBy; // Name
+  final DateTime doneTime;
+  final Roomie roomie;
 
   TaskLog({
-    @required this.doneTimestamp,
-    @required this.doneBy,
+    @required this.doneTime,
+    @required this.roomie,
   });
 }
 
@@ -24,12 +24,47 @@ class Task {
 
   String get id => taskName.toLowerCase().replaceAll(' ', '_');
 
+  Roomie get lastDoneBy {
+    if (taskLogs.isEmpty) return null;
+
+    var min = DateTime.now();
+    var minLog;
+    for (final log in taskLogs) {
+      if (log.doneTime.isBefore(min)) {
+        min = log.doneTime;
+        minLog = log;
+      }
+    }
+    return minLog.roomie;
+  }
+
+  Roomie next(List<Roomie> assigned) {
+    if (taskLogs.isEmpty) return assigned[0];
+
+    var max = DateTime.now();
+    var maxLog;
+    for (final roomie in assigned) {
+      final log = taskLogs.firstWhere(
+        (log) => log.roomie.name == roomie.name,
+        orElse: () => null,
+      );
+
+      if(log == null) return roomie;
+
+      if (log.doneTime.isAfter(max)) {
+        max = log.doneTime;
+        maxLog = log;
+      }
+    }
+    return maxLog.roomie;
+  }
+
   Map<String, dynamic> toMap() => {
         'name': taskName,
         'task_logs': Map.fromIterable(
           taskLogs,
-          key: (log) => log.name,
-          value: (log) => log.timestamp,
+          key: (log) => log.roomie.name,
+          value: (log) => log.doneTime.millisecondsSinceEpoch,
         ),
       };
 
@@ -37,9 +72,10 @@ class Task {
         taskName: values['name'],
         taskLogs: values['task_logs']
                 ?.entries
-                ?.map((keyValue) => TaskLog(
-                      doneBy: keyValue.key,
-                      doneTimestamp: keyValue.value,
+                ?.map<TaskLog>((keyValue) => TaskLog(
+                      roomie: Roomie.forName(keyValue.key),
+                      doneTime:
+                          DateTime.fromMillisecondsSinceEpoch(keyValue.value),
                     ))
                 ?.toList() ??
             [],
